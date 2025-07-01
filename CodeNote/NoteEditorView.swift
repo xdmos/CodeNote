@@ -7,6 +7,7 @@
 
 import SwiftUI
 import SwiftData
+import PhotosUI
 #if canImport(UIKit)
 import UIKit
 #endif
@@ -24,6 +25,9 @@ struct NoteEditorView: View {
     
     private let autoSaveInterval: TimeInterval = 3.0
     @State private var autoSaveTimer: Timer?
+    @State private var selectedPhoto: PhotosPickerItem?
+    @State private var showingFullScreenImage = false
+    @State private var fullScreenImageIndex = 0
     
     enum FocusedField {
         case title, content
@@ -80,6 +84,19 @@ struct NoteEditorView: View {
                         .padding(.horizontal, 20)
                         .padding(.top, 16)
                     
+                    // Photos section - horizontal scroll
+                    if !note.photos.isEmpty {
+                        PhotoScrollView(photos: note.photos, onPhotoTap: { index in
+                            fullScreenImageIndex = index
+                            showingFullScreenImage = true
+                        }, onPhotoDelete: { index in
+                            note.removePhoto(at: index)
+                            saveNote()
+                        })
+                        .padding(.horizontal, 20)
+                        .padding(.top, 16)
+                    }
+                    
                     // Custom text editor with bold first line
                     ZStack {
                         CustomTextEditor(text: $content)
@@ -98,11 +115,7 @@ struct NoteEditorView: View {
                                 
                                 VStack(spacing: 12) {
                                     // Photo picker button
-                                    Button(action: {
-                                        // Photo picker functionality
-                                        let impactFeedback = UIImpactFeedbackGenerator(style: .light)
-                                        impactFeedback.impactOccurred()
-                                    }) {
+                                    PhotosPicker(selection: $selectedPhoto, matching: .images, photoLibrary: .shared()) {
                                         Image(systemName: "photo.fill")
                                             .font(.title2)
                                             .foregroundColor(.primary)
@@ -138,6 +151,14 @@ struct NoteEditorView: View {
             note.regenerateSummary()
             autoSaveTimer?.invalidate()
         }
+        .onChange(of: selectedPhoto) { _, newPhoto in
+            if let newPhoto = newPhoto {
+                loadPhoto(from: newPhoto)
+            }
+        }
+        .fullScreenCover(isPresented: $showingFullScreenImage) {
+            FullScreenImageView(photos: note.photos, currentIndex: $fullScreenImageIndex, isPresented: $showingFullScreenImage)
+        }
     }
     
     private func scheduleAutoSave() {
@@ -166,6 +187,18 @@ struct NoteEditorView: View {
         let lines = content.components(separatedBy: .newlines)
         let firstLine = lines.first?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         return firstLine.isEmpty ? "Nowa notatka" : String(firstLine.prefix(50))
+    }
+    
+    private func loadPhoto(from item: PhotosPickerItem) {
+        Task {
+            if let data = try? await item.loadTransferable(type: Data.self) {
+                DispatchQueue.main.async {
+                    self.note.addPhoto(data)
+                    self.saveNote()
+                    self.selectedPhoto = nil
+                }
+            }
+        }
     }
 }
 

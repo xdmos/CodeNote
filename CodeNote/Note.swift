@@ -23,6 +23,9 @@ final class Note: Hashable {
     var status: String = "notStart"
     var type: String = "Feature"
     
+    // Photo properties
+    var photos: [Data] = []
+    
     init(title: String = "", content: String = "", folder: Folder? = nil) {
         self.title = title
         self.content = content
@@ -33,6 +36,20 @@ final class Note: Hashable {
         self.priority = "Low"
         self.status = "notStart" 
         self.type = "Feature"
+        self.photos = []
+    }
+    
+    // Method to add photo
+    func addPhoto(_ photoData: Data) {
+        photos.append(photoData)
+        modifiedAt = Date()
+    }
+    
+    // Method to remove photo
+    func removePhoto(at index: Int) {
+        guard index >= 0 && index < photos.count else { return }
+        photos.remove(at: index)
+        modifiedAt = Date()
     }
     
     func updateContent(_ newContent: String) {
