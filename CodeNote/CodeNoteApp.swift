@@ -12,9 +12,10 @@ import SwiftData
 struct CodeNoteApp: App {
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
-            Item.self,
+            Folder.self,
+            Note.self,
         ])
-        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
+        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false, allowsSave: true)
 
         do {
             return try ModelContainer(for: schema, configurations: [modelConfiguration])
