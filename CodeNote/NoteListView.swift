@@ -7,6 +7,12 @@
 
 import SwiftUI
 import SwiftData
+#if canImport(UIKit)
+import UIKit
+#endif
+#if canImport(AppKit)
+import AppKit
+#endif
 
 struct NoteListView: View {
     @Environment(\.modelContext) private var modelContext
@@ -31,11 +37,17 @@ struct NoteListView: View {
         NavigationStack {
             ZStack {
                 // Background that adapts to light/dark mode
-                Color(.systemBackground)
-                    .ignoresSafeArea()
-                    .onTapGesture {
-                        isSearchFocused = false
-                    }
+                Group {
+                    #if canImport(UIKit)
+                    Color(.systemBackground)
+                    #else
+                    Color(NSColor.controlBackgroundColor)
+                    #endif
+                }
+                .ignoresSafeArea()
+                .onTapGesture {
+                    isSearchFocused = false
+                }
                 
                 VStack(spacing: 0) {
                     // Top buttons - right under status bar
@@ -47,11 +59,13 @@ struct NoteListView: View {
                             HStack(spacing: 8) {
                                 Image(systemName: "chevron.left")
                                     .font(.body.weight(.semibold))
-                                Text("Foldery")
+                                Text("Folders")
                                     .font(.body.weight(.medium))
                             }
                             .foregroundColor(.primary)
                         }
+                        .accessibilityLabel("Back to Folders")
+                        .accessibilityHint("Return to the folders list")
                         
                         Spacer()
                     }
@@ -83,23 +97,27 @@ struct NoteListView: View {
             }
         }
         .ignoresSafeArea(.all)
+        #if canImport(UIKit)
         .toolbar(.hidden, for: .tabBar)
         .toolbar(.hidden, for: .navigationBar)
         .navigationBarHidden(true)
         .navigationBarBackButtonHidden(true)
+        #endif
         .navigationDestination(item: $selectedNote) { note in
             NoteEditorView(note: note)
         }
     }
     
     private func createNewNote() {
-        let newNote = Note(title: "Nowa notatka", content: "", folder: folder)
+        let newNote = Note(title: "New Note", content: "", folder: folder)
         modelContext.insert(newNote)
         
         do {
             try modelContext.save()
+            #if canImport(UIKit)
             let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
             impactFeedback.impactOccurred()
+            #endif
             
             // Automatically open the new note in editor
             selectedNote = newNote
@@ -144,8 +162,8 @@ struct NoteListView: View {
     
     private func statusColor(_ status: String) -> Color {
         switch status {
-        case "notStart": return .gray
-        case "inProgress": return .blue
+        case "Not Started": return .gray
+        case "In Progress": return .blue
         case "Done": return .green
         default: return .gray
         }
@@ -176,7 +194,7 @@ struct GlassNoteSearchBarView: View {
                     .foregroundStyle(.secondary)
                     .font(.body.weight(.medium))
                 
-                TextField("Szukaj w \(folder.name)", text: $searchText)
+                TextField("Search in \(folder.name)", text: $searchText)
                     .textFieldStyle(PlainTextFieldStyle())
                     .focused($isSearchFocused)
                 
@@ -217,6 +235,8 @@ struct GlassNoteSearchBarView: View {
                     )
                     .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
             }
+            .accessibilityLabel(isSearchFocused ? "Close Keyboard" : "Create New Note")
+            .accessibilityHint(isSearchFocused ? "Dismiss the keyboard" : "Create a new note in this folder")
         }
         .padding(.horizontal, 20)
         .padding(.top, 16)
@@ -235,7 +255,7 @@ struct SimpleNoteRowView: View {
             // Header with title
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 12) {
-                    Text(note.title.isEmpty ? "Nowa notatka" : note.title)
+                    Text(note.title.isEmpty ? "New Note" : note.title)
                         .font(.title2.weight(.semibold))
                         .foregroundStyle(.primary)
                         .lineLimit(2)
@@ -336,6 +356,10 @@ struct SimpleNoteRowView: View {
         )
         .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 4)
         .onTapGesture {
+            #if canImport(UIKit)
+            let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+            impactFeedback.impactOccurred()
+            #endif
             onTap()
         }
     }
@@ -352,8 +376,8 @@ struct SimpleNoteRowView: View {
     
     private func statusColor(_ status: String) -> Color {
         switch status {
-        case "notStart": return .gray
-        case "inProgress": return .blue
+        case "Not Started": return .gray
+        case "In Progress": return .blue
         case "Done": return .green
         default: return .gray
         }
@@ -371,9 +395,9 @@ struct SimpleNoteRowView: View {
 
 
 #Preview {
-    let folder = Folder(name: "Przykład")
-    let note1 = Note(title: "Pierwsza notatka", content: "To jest przykład treści notatki, która może być dłuższa i zawierać więcej informacji.", folder: folder)
-    let note2 = Note(title: "Druga notatka", content: "Krótka treść", folder: folder)
+    let folder = Folder(name: "Example")
+    let note1 = Note(title: "First Note", content: "This is an example of note content that can be longer and contain more information.", folder: folder)
+    let note2 = Note(title: "Second Note", content: "Short content", folder: folder)
     
     return NoteListView(folder: folder)
         .modelContainer(for: [Folder.self, Note.self], inMemory: true)

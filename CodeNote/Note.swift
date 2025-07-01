@@ -9,6 +9,35 @@ import Foundation
 import SwiftData
 import FoundationModels
 
+// Timeout utility for Foundation Models API calls
+func withTimeout<T>(seconds: TimeInterval, operation: @escaping () async throws -> T) async throws -> T {
+    return try await withThrowingTaskGroup(of: T?.self) { group in
+        group.addTask {
+            try await operation()
+        }
+        
+        group.addTask {
+            try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+            return nil // Return nil instead of throwing to avoid isolation issues
+        }
+        
+        for try await result in group {
+            if let result = result {
+                group.cancelAll()
+                return result
+            }
+        }
+        
+        throw TimeoutError()
+    }
+}
+
+struct TimeoutError: Error, LocalizedError {
+    var errorDescription: String? {
+        return "Foundation Models API call timed out"
+    }
+}
+
 @Model
 final class Note: Hashable {
     var title: String
@@ -20,7 +49,7 @@ final class Note: Hashable {
     
     // Hashtag properties
     var priority: String = "Low"
-    var status: String = "notStart"
+    var status: String = "Not Started"
     var type: String = "Feature"
     
     // Photo properties
@@ -34,7 +63,7 @@ final class Note: Hashable {
         self.folder = folder
         self.summary = ""
         self.priority = "Low"
-        self.status = "notStart" 
+        self.status = "Not Started" 
         self.type = "Feature"
         self.photos = []
     }
@@ -53,6 +82,7 @@ final class Note: Hashable {
     }
     
     func updateContent(_ newContent: String) {
+        print("🔄 DEBUG: updateContent called with: '\(newContent.prefix(50))'")
         self.content = newContent
         self.modifiedAt = Date()
         
@@ -60,60 +90,182 @@ final class Note: Hashable {
         generateIntelligentTitle()
         
         // Generate summary using Apple Intelligence FoundationModels framework
+        print("🔄 DEBUG: About to call generateSummary() from updateContent")
         generateSummary()
     }
     
     private func generateIntelligentTitle() {
         guard !content.isEmpty else {
-            self.title = "Nowa notatka"
+            self.title = "New Note"
             return
         }
         
-        // Use same algorithm as summary generation for title
-        let intelligentTitle = createIntelligentTitle(from: content)
-        self.title = intelligentTitle.isEmpty ? "Nowa notatka" : intelligentTitle
+        // Use Apple Foundation Models for title generation
+        Task {
+            await generateFoundationModelsTitle()
+        }
     }
     
-    private func createIntelligentTitle(from text: String) -> String {
-        // Use same key word extraction as summary
-        let cleanText = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard cleanText.count > 10 else { return "" }
+    @MainActor
+    private func generateFoundationModelsTitle() async {
+        do {
+            // Try to use Foundation Models for title generation
+            let generatedTitle = try await generateTitleWithFoundationModels(text: content)
+            self.title = generatedTitle.isEmpty ? fallbackTitle() : generatedTitle
+            print("✅ TITLE GENERATION SUCCESS: '\(self.title)'")
+        } catch {
+            // Fallback if Foundation Models fails
+            print("❌ TITLE GENERATION FAILED: \(error.localizedDescription)")
+            print("🔄 Using fallback title generation...")
+            self.title = fallbackTitle()
+            print("📝 Fallback title: '\(self.title)'")
+        }
+    }
+    
+    @available(iOS 18.0, *)
+    private func generateTitleWithFoundationModels(text: String) async throws -> String {
+        // DEBUG: Check input text
+        print("🔍 DEBUG TITLE: Input text length: \(text.count)")
+        print("🔍 DEBUG TITLE: Input text preview: '\(text.prefix(100))'")
         
-        // Split into words and analyze
-        let words = cleanText.components(separatedBy: .whitespacesAndNewlines)
-            .filter { !$0.isEmpty && $0.count > 2 }
+        // Foundation Models API for title generation
+        // When Apple releases the final API, this will work:
         
-        guard words.count > 3 else { return "" }
+        /*
+        let session = LanguageModelSession()
         
-        // Polish stop words to remove (same as summary)
-        let stopWords = Set(["i", "a", "o", "w", "z", "na", "do", "od", "za", "po", "dla", "bez", "jak", "że", "co", "to", "się", "nie", "czy", "też", "już", "tylko", "bardzo", "może", "przez", "przed", "nad", "pod", "około", "wraz", "oraz", "także", "albo", "czyli", "więc", "jednak", "mimo", "podczas", "wobec", "według", "the", "and", "or", "but", "is", "are", "was", "were", "have", "has", "had", "will", "would", "could", "should", "may", "might", "can", "must"])
-        
-        // Extract key words (same logic as summary)
-        let keyWords = words.filter { word in
-            !stopWords.contains(word.lowercased()) && 
-            word.count >= 3 &&
-            word.allSatisfy { $0.isLetter || $0.isNumber }
+        let prompt = Prompt {
+            "Generate a concise title for this note in 2-4 words."
+            "Make it descriptive and professional."
+            "Only return the title, nothing else."
+            ""
+            text
         }
         
-        // Take first 3-5 key words for title
-        let titleWords = Array(keyWords.prefix(5))
-        guard titleWords.count >= 2 else { return "" }
+        let response = try await session.respond(to: prompt)
+        let finalResponse = response.content.trimmingCharacters(in: .whitespacesAndNewlines)
         
-        // Capitalize first letter of each word for proper title formatting
-        let capitalizedWords = titleWords.map { word in
-            word.prefix(1).uppercased() + word.dropFirst().lowercased()
+        // DEBUG: Log Foundation Models response for title
+        print("🤖 FOUNDATION MODELS TITLE RESPONSE:")
+        print("📝 Input text: \(text.prefix(100))...")
+        print("🎯 Generated title: '\(finalResponse)'")
+        print("📊 Title length: \(finalResponse.count) characters")
+        print("---")
+        
+        return finalResponse
+        */
+        
+        // Foundation Models framework (iOS 26 built-in) with timeout
+        let session = LanguageModelSession()
+        
+        let prompt = Prompt {
+            "Generate a concise title for this note in 2-4 words."
+            "Make it descriptive and professional." 
+            "Only return the title, nothing else."
+            ""
+            text
         }
         
-        return capitalizedWords.joined(separator: " ")
+        // Add timeout to prevent hanging in simulator
+        let response = try await withTimeout(seconds: 10) {
+            try await session.respond(to: prompt)
+        }
+        let finalResponse = response.content.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        // DEBUG: Log Foundation Models response for title
+        print("🤖 FOUNDATION MODELS TITLE RESPONSE:")
+        print("📝 Input text: \(text.prefix(100))...")
+        print("🎯 Generated title: '\(finalResponse)'")
+        print("📊 Title length: \(finalResponse.count) characters")
+        print("---")
+        
+        // Check if Foundation Models returned an error-like response
+        let errorIndicators = [
+            "I'm sorry, but I can't",
+            "I cannot provide",
+            "Could you please provide",
+            "without the actual content",
+            "I don't have access",
+            "I'm unable to create",
+            "I can't view or process",
+            "I cannot fulfill that request",
+            "I can't assist with that",
+            "if you provide the text content",
+            "However, if you provide",
+            "I can't process text from",
+            "I cannot assist with",
+            "visual content",
+            "modify visual content",
+            "text-based summaries",
+            "Please provide the note content"
+        ]
+        
+        let responseContainsError = errorIndicators.contains { indicator in
+            finalResponse.lowercased().contains(indicator.lowercased())
+        }
+        
+        if responseContainsError {
+            print("⚠️ Foundation Models returned error-like response, throwing error to trigger fallback")
+            throw NSError(domain: "FoundationModelsError", code: 1, userInfo: [NSLocalizedDescriptionKey: "Foundation Models returned an error response"])
+        }
+        
+        return finalResponse
+    }
+    
+    private func fallbackTitle() -> String {
+        // Smart fallback: extract key words for title
+        let cleanContent = content.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        if cleanContent.isEmpty {
+            return "New Note"
+        }
+        
+        // Try to extract meaningful title from first sentence
+        let firstSentence = cleanContent.components(separatedBy: CharacterSet(charactersIn: ".!?\n"))
+            .first?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        
+        if firstSentence.isEmpty {
+            return "New Note"
+        }
+        
+        // Extract important words (skip common words)
+        let commonWords = Set(["the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for", "of", "with", "by", "is", "are", "was", "were", "be", "been", "have", "has", "had", "do", "does", "did", "will", "would", "could", "should", "may", "might", "can", "this", "that", "these", "those", "i", "you", "he", "she", "it", "we", "they", "me", "him", "her", "us", "them"])
+        
+        let words = firstSentence.lowercased()
+            .components(separatedBy: CharacterSet.alphanumerics.inverted)
+            .filter { !$0.isEmpty && !commonWords.contains($0) && $0.count > 2 }
+        
+        // Take first 2-3 important words
+        let titleWords = Array(words.prefix(3))
+        
+        if titleWords.isEmpty {
+            // If no meaningful words found, use first few words
+            let allWords = firstSentence.components(separatedBy: .whitespaces)
+                .filter { !$0.isEmpty }
+            return Array(allWords.prefix(3)).joined(separator: " ")
+        }
+        
+        // Capitalize first letter of each word
+        let capitalizedTitle = titleWords.map { word in
+            String(word.prefix(1).uppercased() + word.dropFirst())
+        }.joined(separator: " ")
+        
+        return capitalizedTitle
     }
     
     private func generateSummary() {
-        // Only generate summary for content longer than 50 characters
-        guard content.count > 50 else {
+        // DEBUG: Check if generateSummary is called
+        print("🔍 DEBUG SUMMARY: generateSummary() called with content length: \(content.count)")
+        print("🔍 DEBUG SUMMARY: Content preview: '\(content.prefix(50))'")
+        
+        // Only generate summary for content longer than 10 characters
+        guard content.count > 10 else {
+            print("⚠️ SUMMARY: Content too short (\(content.count) chars), skipping summary generation")
             summary = ""
             return
         }
         
+        print("✅ SUMMARY: Starting summary generation...")
         // Use Apple Intelligence for summarization
         Task {
             await generateAppleIntelligenceSummary()
@@ -126,152 +278,165 @@ final class Note: Hashable {
         if #available(iOS 18.0, *) {
             do {
                 // Use FoundationModels framework for real AI summarization
-                summary = try await generateFoundationModelsSummary()
+                summary = try await generateSummaryWithFoundationModels(text: content)
+                print("✅ SUMMARY GENERATION SUCCESS: '\(summary)'")
             } catch {
                 // Fallback if FoundationModels fails
+                print("❌ SUMMARY GENERATION FAILED: \(error.localizedDescription)")
+                print("🔄 Using fallback summary generation...")
                 summary = createFallbackSummary()
+                print("📋 Fallback summary: '\(summary)'")
             }
         } else {
             // Fallback for older iOS versions
+            print("⚠️ iOS VERSION TOO OLD: Using fallback summary")
             summary = createFallbackSummary()
+            print("📋 Fallback summary: '\(summary)'")
         }
     }
     
     @available(iOS 18.0, *)
-    private func generateFoundationModelsSummary() async throws -> String {
-        // Use FoundationModels framework for real AI summarization
+    private func generateSummaryWithFoundationModels(text: String) async throws -> String {
+        // DEBUG: Check input text
+        print("🔍 DEBUG: Input text length: \(text.count)")
+        print("🔍 DEBUG: Input text preview: '\(text.prefix(100))'")
         
-        do {
-            // Use FoundationModels summarization capability
-            let summary = try await performSummarization(text: content)
-            
-            // Ensure it fits in 3 lines (approximately 180 characters)
-            if summary.count > 180 {
-                let truncated = String(summary.prefix(180))
-                if let lastSpaceIndex = truncated.lastIndex(of: " ") {
-                    return String(truncated[..<lastSpaceIndex]) + "..."
-                }
-                return truncated + "..."
-            }
-            
-            return summary
-            
-        } catch {
-            print("FoundationModels summarization failed: \(error)")
-            throw error
-        }
-    }
-    
-    @available(iOS 18.0, *)
-    private func performSummarization(text: String) async throws -> String {
-        // Try to use FoundationModels if available, otherwise fallback
-        do {
-            // Attempt to use FoundationModels - this will be implemented
-            // when the exact API is documented for iOS 26 release
-            return try await useFoundationModelsAPI(text: text)
-        } catch {
-            // Fallback to intelligent summarization
-            return createAISummary(from: text)
-        }
-    }
-    
-    @available(iOS 18.0, *)
-    private func useFoundationModelsAPI(text: String) async throws -> String {
-        // FoundationModels implementation ready for iOS 26 final release
-        // When Apple releases the final API, replace this with:
+        // Foundation Models API for summary generation
+        // When Apple releases the final API, this will work:
         
         /*
         let session = LanguageModelSession()
         
         let prompt = Prompt {
-            "Jesteś ekspertem w tworzeniu zwięzłych podsumowań polskich tekstów."
-            "Stwórz krótkie podsumowanie następującego tekstu w maksymalnie 20 słowach:"
-            "Skup się na najważniejszych informacjach."
+            "Create a brief summary of this note content."
+            "Keep it under 100 characters and focus on key points."
+            "Make it clear and informative."
+            "Only return the summary, nothing else."
             ""
             text
         }
         
         let response = try await session.respond(to: prompt)
-        return response.trimmingCharacters(in: .whitespacesAndNewlines)
+        let finalResponse = response.content.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        // DEBUG: Log Foundation Models response for summary
+        print("🤖 FOUNDATION MODELS SUMMARY RESPONSE:")
+        print("📝 Input text: \(text.prefix(200))...")
+        print("📋 Generated summary: '\(finalResponse)'")
+        print("📊 Summary length: \(finalResponse.count) characters")
+        print("📏 Fits in 4 lines: \(finalResponse.count <= 200 ? "✅" : "❌")")
+        print("---")
+        
+        return finalResponse
         */
         
-        // For now, throw to use intelligent fallback
-        throw NSError(domain: "FoundationModelsNotYetAvailable", code: 1)
+        // Foundation Models framework (iOS 26 built-in) with timeout
+        let session = LanguageModelSession()
+        
+        let prompt = Prompt {
+            "You are summarizing TEXT CONTENT from a note."
+            "This is plain text, not an image or visual content."
+            "Create a brief summary of this note content."
+            "Keep it under 100 characters and focus on key points."
+            "Make it clear and informative."
+            "Only return the summary, nothing else."
+            ""
+            text
+        }
+        
+        // Add timeout to prevent hanging in simulator
+        let response = try await withTimeout(seconds: 10) {
+            try await session.respond(to: prompt)
+        }
+        let finalResponse = response.content.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        // DEBUG: Log Foundation Models response for summary
+        print("🤖 FOUNDATION MODELS SUMMARY RESPONSE:")
+        print("📝 Input text: \(text.prefix(200))...")
+        print("📋 Generated summary: '\(finalResponse)'")
+        print("📊 Summary length: \(finalResponse.count) characters")
+        print("📏 Fits in 4 lines: \(finalResponse.count <= 200 ? "✅" : "❌")")
+        print("---")
+        
+        // Check if Foundation Models returned an error-like response
+        let errorIndicators = [
+            "I'm sorry, but I can't",
+            "I cannot provide",
+            "Could you please provide",
+            "without the actual content",
+            "I don't have access",
+            "I'm unable to create",
+            "I can't view or process",
+            "I cannot fulfill that request",
+            "I can't assist with that",
+            "if you provide the text content",
+            "However, if you provide",
+            "I can't process text from",
+            "I cannot assist with",
+            "visual content",
+            "modify visual content",
+            "text-based summaries",
+            "Please provide the note content"
+        ]
+        
+        let responseContainsError = errorIndicators.contains { indicator in
+            finalResponse.lowercased().contains(indicator.lowercased())
+        }
+        
+        if responseContainsError {
+            print("⚠️ Foundation Models returned error-like response, throwing error to trigger fallback")
+            throw NSError(domain: "FoundationModelsError", code: 1, userInfo: [NSLocalizedDescriptionKey: "Foundation Models returned an error response"])
+        }
+        
+        return finalResponse
     }
     
-    private func createAISummary(from text: String) -> String {
-        // Create intelligent summary, not copy text
-        let cleanText = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard cleanText.count > 50 else { return "" }
+    private func createFallbackSummary() -> String {
+        // Smart fallback: create actual summary from content
+        let cleanContent = content.trimmingCharacters(in: .whitespacesAndNewlines)
         
-        // Split into words and analyze
-        let words = cleanText.components(separatedBy: .whitespacesAndNewlines)
-            .filter { !$0.isEmpty && $0.count > 2 }
-        
-        guard words.count > 10 else { return "" }
-        
-        // Polish stop words to remove
-        let stopWords = Set(["i", "a", "o", "w", "z", "na", "do", "od", "za", "po", "dla", "bez", "jak", "że", "co", "to", "się", "nie", "czy", "też", "już", "tylko", "bardzo", "może", "przez", "przed", "nad", "pod", "około", "wraz", "oraz", "także", "albo", "czyli", "więc", "jednak", "mimo", "podczas", "wobec", "według", "the", "and", "or", "but", "is", "are", "was", "were", "have", "has", "had", "will", "would", "could", "should", "may", "might", "can", "must"])
-        
-        // Extract key words (not stop words)
-        let keyWords = words.filter { word in
-            !stopWords.contains(word.lowercased()) && 
-            word.count >= 3 &&
-            word.allSatisfy { $0.isLetter || $0.isNumber }
+        // If content is short, return it as is
+        if cleanContent.count <= 100 {
+            return cleanContent
         }
         
-        // Take more key words to create fuller 3-line summary
-        let summaryWords = Array(keyWords.prefix(18))
-        guard summaryWords.count >= 3 else { return "" }
+        // Extract key sentences for summary
+        let sentences = cleanContent.components(separatedBy: CharacterSet(charactersIn: ".!?"))
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty && $0.count > 10 }
         
-        // Create summary with proper formatting for 3 lines
-        var summary = summaryWords.joined(separator: " ")
+        // Take first sentence and one key sentence from middle/end
+        var summaryParts: [String] = []
         
-        // Ensure it fills 3 lines (aim for ~180-210 characters)
-        if summary.count > 210 {
-            let truncatedWords = Array(summaryWords.prefix(15))
-            summary = truncatedWords.joined(separator: " ")
-        } else if summary.count < 120 && summaryWords.count >= 10 {
-            // If too short, try to use more words
-            let longerWords = Array(keyWords.prefix(20))
-            summary = longerWords.joined(separator: " ")
+        if let firstSentence = sentences.first {
+            summaryParts.append(firstSentence)
         }
         
-        // Add proper ending if summary is meaningful
-        if summary.count > 20 {
-            summary = summary + "..."
-        }
-        
-        return summary
-    }
-    
-    private func createIntelligentFallbackSummary(from text: String) -> String {
-        // Create actual summary, not copy the text
-        let words = text.components(separatedBy: .whitespacesAndNewlines)
-            .filter { !$0.isEmpty && $0.count > 2 }
-        
-        // Take key words and create a meaningful summary
-        let keyWords = words.prefix(15)
-        let summary = keyWords.joined(separator: " ")
-        
-        if summary.count > 150 {
-            let truncated = String(summary.prefix(150))
-            if let lastSpace = truncated.lastIndex(of: " ") {
-                return String(truncated[..<lastSpace])
+        // Add a key sentence from later in the text if available
+        if sentences.count > 2 {
+            let midIndex = sentences.count / 2
+            if midIndex < sentences.count {
+                summaryParts.append(sentences[midIndex])
             }
         }
         
+        let summary = summaryParts.joined(separator: ". ") + (summaryParts.count > 1 ? "." : "")
+        
+        // Limit to reasonable length for display
+        if summary.count > 180 {
+            let truncated = String(summary.prefix(180))
+            if let lastSpace = truncated.lastIndex(of: " ") {
+                return String(truncated[..<lastSpace]) + "..."
+            }
+            return truncated + "..."
+        }
+        
         return summary
-    }
-    
-    
-    private func createFallbackSummary() -> String {
-        // Create intelligent summary instead of copying text
-        return createIntelligentFallbackSummary(from: content)
     }
     
     // Public method to regenerate summary manually
     func regenerateSummary() {
+        print("🔄 DEBUG: regenerateSummary() called manually")
         generateSummary()
     }
     

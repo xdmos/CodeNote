@@ -7,6 +7,9 @@
 
 import SwiftUI
 import SwiftData
+#if canImport(UIKit)
+import UIKit
+#endif
 #if canImport(AppKit)
 import AppKit
 #endif
@@ -67,7 +70,7 @@ struct FolderView: View {
                             .listRowSeparator(.hidden)
                             .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
                             .swipeActions(edge: .leading) {
-                                Button("Edytuj") {
+                                Button("Edit") {
                                     editFolder(folder)
                                 }
                                 .tint(.blue)
@@ -84,26 +87,28 @@ struct FolderView: View {
             }
         }
         .ignoresSafeArea(.all)
+        #if canImport(UIKit)
         .toolbar(.hidden, for: .tabBar)
         .toolbar(.hidden, for: .navigationBar)
         .navigationBarBackButtonHidden(true)
-        .alert("Nowy folder", isPresented: $showingCreateFolder) {
-            TextField("Nazwa folderu", text: $newFolderName)
-            Button("Anuluj", role: .cancel) {
+        #endif
+        .alert("New Folder", isPresented: $showingCreateFolder) {
+            TextField("Folder Name", text: $newFolderName)
+            Button("Cancel", role: .cancel) {
                 newFolderName = ""
             }
-            Button("Utwórz") {
+            Button("Create") {
                 createFolder()
             }
             .disabled(newFolderName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         }
-        .alert("Edytuj folder", isPresented: $showingEditFolder) {
-            TextField("Nazwa folderu", text: $editFolderName)
-            Button("Anuluj", role: .cancel) {
+        .alert("Edit Folder", isPresented: $showingEditFolder) {
+            TextField("Folder Name", text: $editFolderName)
+            Button("Cancel", role: .cancel) {
                 editingFolder = nil
                 editFolderName = ""
             }
-            Button("Zapisz") {
+            Button("Save") {
                 saveEditedFolder()
             }
             .disabled(editFolderName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)

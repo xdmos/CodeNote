@@ -11,6 +11,9 @@ import PhotosUI
 #if canImport(UIKit)
 import UIKit
 #endif
+#if canImport(AppKit)
+import AppKit
+#endif
 
 struct NoteEditorView: View {
     @Environment(\.modelContext) private var modelContext
@@ -37,11 +40,17 @@ struct NoteEditorView: View {
         NavigationStack {
             ZStack {
                 // Background that adapts to light/dark mode
-                Color(.systemBackground)
-                    .ignoresSafeArea()
-                    .onTapGesture {
-                        focusedField = nil
-                    }
+                Group {
+                    #if canImport(UIKit)
+                    Color(.systemBackground)
+                    #else
+                    Color(NSColor.controlBackgroundColor)
+                    #endif
+                }
+                .ignoresSafeArea()
+                .onTapGesture {
+                    focusedField = nil
+                }
                 
                 VStack(spacing: 0) {
                     // Simple header with only back button
@@ -55,11 +64,13 @@ struct NoteEditorView: View {
                             HStack(spacing: 8) {
                                 Image(systemName: "chevron.left")
                                     .font(.body.weight(.semibold))
-                                Text("Notatki")
+                                Text("Notes")
                                     .font(.body.weight(.medium))
                             }
                             .foregroundColor(.primary)
                         }
+                        .accessibilityLabel("Back to Notes")
+                        .accessibilityHint("Save note and return to notes list")
                         
                         Spacer()
                         
@@ -119,7 +130,7 @@ struct NoteEditorView: View {
                                         Image(systemName: "photo.fill")
                                             .font(.title2)
                                             .foregroundColor(.primary)
-                                            .frame(width: 56, height: 56)
+                                            .frame(width: 44, height: 44)
                                             .background(.regularMaterial, in: Circle())
                                             .overlay(
                                                 Circle()
@@ -127,6 +138,8 @@ struct NoteEditorView: View {
                                             )
                                             .shadow(color: .black.opacity(0.1), radius: 8, x: 0, y: 4)
                                     }
+                                    .accessibilityLabel("Add Photo")
+                                    .accessibilityHint("Select a photo from your photo library to add to this note")
                                 }
                                 .padding(.trailing, 20)
                                 .padding(.bottom, 34)
@@ -137,10 +150,12 @@ struct NoteEditorView: View {
             }
         }
         .ignoresSafeArea(.all)
+        #if canImport(UIKit)
         .toolbar(.hidden, for: .tabBar)
         .toolbar(.hidden, for: .navigationBar)
         .navigationBarHidden(true)
         .navigationBarBackButtonHidden(true)
+        #endif
         .onAppear {
             title = note.title
             content = note.content
@@ -186,7 +201,7 @@ struct NoteEditorView: View {
     private func generateTitleFromContent() -> String {
         let lines = content.components(separatedBy: .newlines)
         let firstLine = lines.first?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        return firstLine.isEmpty ? "Nowa notatka" : String(firstLine.prefix(50))
+        return firstLine.isEmpty ? "New Note" : String(firstLine.prefix(50))
     }
     
     private func loadPhoto(from item: PhotosPickerItem) {
@@ -229,7 +244,7 @@ struct GlassEditorHeaderView: View {
                 HStack(spacing: 6) {
                     ProgressView()
                         .scaleEffect(0.7)
-                    Text("Zapisywanie...")
+                    Text("Saving...")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -253,7 +268,7 @@ struct GlassEditorHeaderView: View {
                 }
                 
                 // Done button
-                Button("Gotowe", action: onDone)
+                Button("Done", action: onDone)
                     .font(.body.weight(.semibold))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 16)
@@ -291,7 +306,7 @@ struct GlassEditorFooterView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     
-                    Text("Ostatnia zmiana: \(modifiedAt, style: .relative)")
+                    Text("Last change: \(modifiedAt, style: .relative)")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -301,7 +316,7 @@ struct GlassEditorFooterView: View {
                         Image(systemName: "textformat.abc")
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                        Text("\(characterCount) znaków")
+                        Text("\(characterCount) characters")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -310,7 +325,7 @@ struct GlassEditorFooterView: View {
                         Image(systemName: "doc.text")
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                        Text("\(wordCount) słów")
+                        Text("\(wordCount) words")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -351,8 +366,8 @@ struct GlassEditorFooterView: View {
 }
 
 #Preview {
-    let folder = Folder(name: "Przykład")
-    let note = Note(title: "Przykładowa notatka", content: "To jest przykład treści notatki.", folder: folder)
+    let folder = Folder(name: "Example")
+    let note = Note(title: "Example Note", content: "This is an example of note content.", folder: folder)
     
     return NoteEditorView(note: note)
         .modelContainer(for: [Folder.self, Note.self], inMemory: true)
@@ -449,7 +464,7 @@ struct HashtagsEditView: View {
     @State private var showingTypePicker = false
     
     let priorities = ["Low", "Medium", "High"]
-    let statuses = ["notStart", "inProgress", "Done"]
+    let statuses = ["Not Started", "In Progress", "Done"]
     let types = ["Feature", "Bug", "Improvement"]
     
     var body: some View {
@@ -471,7 +486,7 @@ struct HashtagsEditView: View {
             }
             .actionSheet(isPresented: $showingPriorityPicker) {
                 ActionSheet(
-                    title: Text("Wybierz priorytet"),
+                    title: Text("Select Priority"),
                     buttons: priorities.map { priority in
                         .default(Text(priority)) {
                             note.priority = priority
@@ -497,7 +512,7 @@ struct HashtagsEditView: View {
             }
             .actionSheet(isPresented: $showingStatusPicker) {
                 ActionSheet(
-                    title: Text("Wybierz status"),
+                    title: Text("Select Status"),
                     buttons: statuses.map { status in
                         .default(Text(status)) {
                             note.status = status
@@ -523,7 +538,7 @@ struct HashtagsEditView: View {
             }
             .actionSheet(isPresented: $showingTypePicker) {
                 ActionSheet(
-                    title: Text("Wybierz typ"),
+                    title: Text("Select Type"),
                     buttons: types.map { type in
                         .default(Text(type)) {
                             note.type = type
@@ -548,8 +563,8 @@ struct HashtagsEditView: View {
     
     private func statusColor(_ status: String) -> Color {
         switch status {
-        case "notStart": return .gray
-        case "inProgress": return .blue
+        case "Not Started": return .gray
+        case "In Progress": return .blue
         case "Done": return .green
         default: return .gray
         }
