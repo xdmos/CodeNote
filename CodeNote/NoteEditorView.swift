@@ -57,8 +57,6 @@ struct NoteEditorView: View {
                     HStack {
                         Button(action: {
                             saveNote()
-                            // Generate summary when transitioning back to notes list
-                            note.regenerateSummary()
                             dismiss()
                         }) {
                             HStack(spacing: 8) {
@@ -162,8 +160,6 @@ struct NoteEditorView: View {
         }
         .onDisappear {
             saveNote()
-            // Generate summary every time when leaving note view
-            note.regenerateSummary()
             autoSaveTimer?.invalidate()
         }
         .onChange(of: selectedPhoto) { _, newPhoto in
@@ -474,7 +470,7 @@ struct HashtagsEditView: View {
                 showingPriorityPicker = true
             }) {
                 Text(note.priority)
-                    .font(.body.weight(.medium))
+                    .font(.footnote.weight(.medium))
                     .foregroundStyle(priorityColor(note.priority))
                     .padding(.horizontal, 16)
                     .padding(.vertical, 8)
@@ -484,15 +480,12 @@ struct HashtagsEditView: View {
                             .stroke(priorityColor(note.priority).opacity(0.3), lineWidth: 1)
                     )
             }
-            .actionSheet(isPresented: $showingPriorityPicker) {
-                ActionSheet(
-                    title: Text("Select Priority"),
-                    buttons: priorities.map { priority in
-                        .default(Text(priority)) {
-                            note.priority = priority
-                        }
-                    } + [.cancel()]
-                )
+            .confirmationDialog("Select Priority", isPresented: $showingPriorityPicker) {
+                ForEach(priorities, id: \.self) { priority in
+                    Button(priority) {
+                        note.priority = priority
+                    }
+                }
             }
             
             // Status hashtag
@@ -500,7 +493,7 @@ struct HashtagsEditView: View {
                 showingStatusPicker = true
             }) {
                 Text(note.status)
-                    .font(.body.weight(.medium))
+                    .font(.footnote.weight(.medium))
                     .foregroundStyle(statusColor(note.status))
                     .padding(.horizontal, 16)
                     .padding(.vertical, 8)
@@ -510,15 +503,12 @@ struct HashtagsEditView: View {
                             .stroke(statusColor(note.status).opacity(0.3), lineWidth: 1)
                     )
             }
-            .actionSheet(isPresented: $showingStatusPicker) {
-                ActionSheet(
-                    title: Text("Select Status"),
-                    buttons: statuses.map { status in
-                        .default(Text(status)) {
-                            note.status = status
-                        }
-                    } + [.cancel()]
-                )
+            .confirmationDialog("Select Status", isPresented: $showingStatusPicker) {
+                ForEach(statuses, id: \.self) { status in
+                    Button(status) {
+                        note.status = status
+                    }
+                }
             }
             
             // Type hashtag
@@ -526,7 +516,7 @@ struct HashtagsEditView: View {
                 showingTypePicker = true
             }) {
                 Text(note.type)
-                    .font(.body.weight(.medium))
+                    .font(.footnote.weight(.medium))
                     .foregroundStyle(typeColor(note.type))
                     .padding(.horizontal, 16)
                     .padding(.vertical, 8)
@@ -536,15 +526,12 @@ struct HashtagsEditView: View {
                             .stroke(typeColor(note.type).opacity(0.3), lineWidth: 1)
                     )
             }
-            .actionSheet(isPresented: $showingTypePicker) {
-                ActionSheet(
-                    title: Text("Select Type"),
-                    buttons: types.map { type in
-                        .default(Text(type)) {
-                            note.type = type
-                        }
-                    } + [.cancel()]
-                )
+            .confirmationDialog("Select Type", isPresented: $showingTypePicker) {
+                ForEach(types, id: \.self) { type in
+                    Button(type) {
+                        note.type = type
+                    }
+                }
             }
             
             Spacer()

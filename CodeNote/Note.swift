@@ -83,15 +83,26 @@ final class Note: Hashable {
     
     func updateContent(_ newContent: String) {
         print("🔄 DEBUG: updateContent called with: '\(newContent.prefix(50))'")
+        
+        // Only generate summary and title if content actually changed
+        let contentChanged = self.content != newContent
+        
         self.content = newContent
         self.modifiedAt = Date()
         
-        // Generate intelligent title (3-5 words) using Foundation framework
-        generateIntelligentTitle()
-        
-        // Generate summary using Apple Intelligence FoundationModels framework
-        print("🔄 DEBUG: About to call generateSummary() from updateContent")
-        generateSummary()
+        // Only regenerate if content actually changed
+        if contentChanged {
+            print("🔄 DEBUG: Content changed, regenerating title and summary")
+            
+            // Generate intelligent title (3-5 words) using Foundation framework
+            generateIntelligentTitle()
+            
+            // Generate summary using Apple Intelligence FoundationModels framework
+            print("🔄 DEBUG: About to call generateSummary() from updateContent")
+            generateSummary()
+        } else {
+            print("🔄 DEBUG: Content unchanged, skipping title and summary generation")
+        }
     }
     
     private func generateIntelligentTitle() {

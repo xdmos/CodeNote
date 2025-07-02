@@ -264,7 +264,7 @@ struct SimpleNoteRowView: View {
                     HStack(spacing: 8) {
                         // Priority hashtag
                         Text(note.priority)
-                            .font(.body.weight(.medium))
+                            .font(.footnote.weight(.medium))
                             .foregroundStyle(priorityColor(note.priority))
                             .padding(.horizontal, 10)
                             .padding(.vertical, 4)
@@ -272,7 +272,7 @@ struct SimpleNoteRowView: View {
                         
                         // Status hashtag
                         Text(note.status)
-                            .font(.body.weight(.medium))
+                            .font(.footnote.weight(.medium))
                             .foregroundStyle(statusColor(note.status))
                             .padding(.horizontal, 10)
                             .padding(.vertical, 4)
@@ -280,7 +280,7 @@ struct SimpleNoteRowView: View {
                         
                         // Type hashtag
                         Text(note.type)
-                            .font(.body.weight(.medium))
+                            .font(.footnote.weight(.medium))
                             .foregroundStyle(typeColor(note.type))
                             .padding(.horizontal, 10)
                             .padding(.vertical, 4)
